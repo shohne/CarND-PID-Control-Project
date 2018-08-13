@@ -12,7 +12,14 @@
 
 
 #define MAX_NUM_STEPS 3000
-
+#define PID_TESTS_CVS_FILE "/home/hohne/uda/CarND-PID-Control-Project/pidTests.csv"
+#define CTE_TOLERANCE 2.0
+#define MIN_TAU_P 0.05
+#define MAX_TAU_P 0.30
+#define MIN_TAU_D 0.25
+#define MAX_TAU_D 1.00
+#define MIN_TAU_I 0.00
+#define MAX_TAU_I 0.00
 
 
 // for convenience
@@ -43,6 +50,18 @@ std::string hasData(std::string s) {
 
 class PIDTest {
 public:
+
+    PIDTest();
+    
+    PIDTest(    
+        std::default_random_engine& generator, 
+        std::uniform_real_distribution<double>& dist_tau_p,
+        std::uniform_real_distribution<double>& dist_tau_d,
+        std::uniform_real_distribution<double>& dist_tau_i,
+        double throttle,
+        double cte_tolerance
+    );
+
     double tau_p;
     double tau_d;
     double tau_i;
@@ -51,6 +70,7 @@ public:
     double mean_speed;
     double cte_tolerance;
     double max_abs_cte;
+    int result;
     
     friend std::ostream& operator<<(std::ostream& os, const PIDTest& pidTest);
 
@@ -59,15 +79,50 @@ public:
     
 };
 
+
+PIDTest::PIDTest() {
+    tau_p = 0;
+    tau_d = 0;
+    tau_i = 0;
+    throttle = 0;
+    num_steps = 0;
+    mean_speed = 0;
+    cte_tolerance = cte_tolerance;
+    max_abs_cte = 0;
+    result = 0;
+}
+
+
+PIDTest::PIDTest(
+    std::default_random_engine& generator, 
+    std::uniform_real_distribution<double>& dist_tau_p,
+    std::uniform_real_distribution<double>& dist_tau_d,
+    std::uniform_real_distribution<double>& dist_tau_i,
+    double throttle,
+    double cte_tolerance
+) {
+    tau_p = dist_tau_p(generator);
+    tau_d = dist_tau_d(generator);
+    tau_i = dist_tau_i(generator);
+    throttle = throttle;
+    num_steps = 0;
+    mean_speed = 0;
+    cte_tolerance = cte_tolerance;
+    max_abs_cte = 0;
+    result = 0;
+}
+
+
 std::ostream& operator<<(std::ostream& os, const PIDTest& pidTest) {
-    os << pidTest.tau_p;
-    os << pidTest.tau_d;
-    os << pidTest.tau_i;
-    os << pidTest.throttle;
-    os << pidTest.num_steps;
-    os << pidTest.mean_speed;
-    os << pidTest.cte_tolerance;
-    os << pidTest.max_abs_cte;
+    os << pidTest.tau_p << " ";
+    os << pidTest.tau_d << " ";
+    os << pidTest.tau_i << " ";
+    os << pidTest.throttle << " ";
+    os << pidTest.num_steps << " ";
+    os << pidTest.mean_speed << " ";
+    os << pidTest.cte_tolerance << " ";
+    os << pidTest.max_abs_cte << " ";
+    os << pidTest.result << std::endl;
     return os;
 }
 
@@ -76,6 +131,7 @@ std::ostream& operator<<(std::ostream& os, const PIDTest& pidTest) {
 std::vector<PIDTest> PIDTest::load(std::istream& is) {
     std::vector<PIDTest> result;
 
+    char c;
     std::string s;
 
     is >> s;
@@ -83,29 +139,32 @@ std::vector<PIDTest> PIDTest::load(std::istream& is) {
     while (is) {
         PIDTest pidTest;
         is >> pidTest.tau_p;
-        is >> s;
+        is >> c;
         is >> pidTest.tau_d;
-        is >> s;
+        is >> c;
         is >> pidTest.tau_i;
-        is >> s;
+        is >> c;
         is >> pidTest.throttle;
-        is >> s;
+        is >> c;
         is >> pidTest.num_steps;
-        is >> s;
+        is >> c;
         is >> pidTest.mean_speed;
-        is >> s;
+        is >> c;
         is >> pidTest.cte_tolerance;
-        is >> s;
+        is >> c;
         is >> pidTest.max_abs_cte;
-        is >> s;
+        is >> c;
+        is >> pidTest.result;
         result.push_back(pidTest);
     }
+    result.pop_back();
+
     return result;
 }
 
 void PIDTest::save(std::string filename, std::vector<PIDTest>& pidTests) {
     std::ofstream fos(filename.c_str());
-    fos << "tau_p;tau_d;tau_i;throttle;num_steps;mean_speed;cte_tolerante;max_abs_cte" << std::endl;
+    fos << "tau_p;tau_d;tau_i;throttle;num_steps;mean_speed;cte_tolerante;max_abs_cte;result" << std::endl;
     std::for_each(pidTests.begin(), pidTests.end(),
                   [&fos](const PIDTest& pidTest) {
                       fos <<
@@ -117,145 +176,57 @@ void PIDTest::save(std::string filename, std::vector<PIDTest>& pidTests) {
                       pidTest.mean_speed << ";" <<
                       pidTest.cte_tolerance << ";" <<
                       pidTest.max_abs_cte  << ";" <<
+                      pidTest.result  <<
                       std::endl; }
                   );
     fos.close();
 }
 
+
+void saveAndReset(std::vector<PIDTest>& pidTests, PIDTest& pidTest, uWS::WebSocket<uWS::SERVER> ws) {
+    pidTests.push_back(pidTest);
+    if (pidTests.size() % 100 == 99) {
+        PIDTest::save(PID_TESTS_CVS_FILE, pidTests);
+    }
+    std::string msg("42[\"reset\", {}]");
+    ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+}
+
 int main()
 {
     uWS::Hub h;
-    
-    std::ifstream ifs("/Users/silviohohne/projeto/CarND-PID-Control-Project/pidTests.csv");
-    std::vector<PIDTest> pidTests = PIDTest::load(ifs);
-    
-    std::for_each(pidTests.begin(), pidTests.end(), [](const PIDTest& pidTest) { std::cout << pidTest << std::endl;});
 
-    /*
-    PIDTest pidTest1;
-    pidTest1.tau_p = 0.1;
-    pidTest1.tau_d = 0.2;
-    pidTest1.tau_i = 0.3;
-    pidTest1.throttle = 0.4;
-    pidTest1.num_steps = 100;
-    pidTest1.mean_speed = 3.444;
-    pidTest1.cte_tolerance = 2.0;
-    pidTest1.max_abs_cte = 1.9;
-    pidTests.push_back(pidTest1);
-    
-    pidTest1 = PIDTest();
-    pidTest1.tau_p = 1.1;
-    pidTest1.tau_d = 1.2;
-    pidTest1.tau_i = 1.3;
-    pidTest1.throttle = 1.4;
-    pidTest1.num_steps = 200;
-    pidTest1.mean_speed = 4.444;
-    pidTest1.cte_tolerance = 3.0;
-    pidTest1.max_abs_cte = 333.9;
-    pidTests.push_back(pidTest1);
+    std::vector<PIDTest> pidTests;
+    PIDTest pidTest;
 
-    PIDTest::save("/Users/silviohohne/projeto/CarND-PID-Control-Project/pidTests.txt", pidTests);
-    */
-    
-    if (true) {
-        return 0;
+    std::ifstream ifs(PID_TESTS_CVS_FILE);
+    if(ifs) {
+        pidTests = PIDTest::load(ifs);
     }
-    
-    PID pid;
-    // TODO: Initialize the pid variable.
-    
+
     std::default_random_engine generator;
-    std::normal_distribution<double> dist_steer(0, .06);
-    
-    
-    const double tau_p =  .1;
-    const double tau_d = 0.5;
-    const double tau_i = 0.0;
-    const double throttle = 0.25; // T = 1:28
+    std::uniform_real_distribution<double> dist_tau_p(MIN_TAU_P, MAX_TAU_P);
+    std::uniform_real_distribution<double> dist_tau_d(MIN_TAU_D, MAX_TAU_D);
+    std::uniform_real_distribution<double> dist_tau_i(MIN_TAU_I, MAX_TAU_I);
+
+    double throttle = 0.25; 
     int step = 0;
-    double sum_speed = 0;
-    
-    /*
-     const double tau_p =  .1;
-     const double tau_d = 0.5;
-     const double tau_i = 0.0;
-     const double throttle = 0.3; // T = 1:14
-     */
-    
-    /*
-     const double tau_p =  .1;
-     const double tau_d = 0.5;
-     const double tau_i = 0.0;
-     const double throttle = 0.33; // T = 1:08
-     */
-    
-    /*
-     const double tau_p =  .1;
-     const double tau_d = 0.5;
-     const double tau_i = 0.0;
-     const double throttle = 0.35; // T = 1:04
-     */
-    
-    /*
-     const double tau_p =  .12;
-     const double tau_d = 0.64;
-     const double tau_i = 0.0;
-     const double throttle = 0.35; // T = 1:04
-     */
-    
-    /*
-     const double tau_p =  .1;
-     const double tau_d = 1.5;
-     const double tau_i = 0.0;
-     const double throttle = 0.37; // T = 1:02
-     */
-    
-    /*
-     const double tau_p =  .1;
-     const double tau_d = 1.5;
-     const double tau_i = 0.0;
-     const double throttle = 0.39; // T = 1:00
-     */
-    
-    /*
-     const double tau_p =  .1;
-     const double tau_d = 1.5;
-     const double tau_i = 0.0;
-     const double throttle = 0.42; // T = 0:56
-     */
-    
-    /*
-     const double tau_p =  .1;
-     const double tau_d = 1.7;
-     const double tau_i = 0.0;
-     const double throttle = 0.42; // T = 0:57 nao
-     */
-    
-    /*
-     const double tau_p =  .28;
-     const double tau_d =  7.5;
-     const double tau_i = 0.0000;
-     const double throttle = 0.40;  // T = 1:25
-     */
-    
-    /*
-     const double tau_p =  .28;
-     const double tau_d =  14.5;
-     const double tau_i = 0.00;
-     const double throttle = 0.50;  // T = 1:40
-     */
-    
-    
-    
-    
-    
-    
-    double max_abs_cte = 0.0;
     double cte_prev = 0.0;
     double cte_sum = 0.0;
     
-    
-    h.onMessage([&pid, &pidTests, &step, &max_abs_cte, &throttle, &tau_p, &tau_d, &tau_i, &cte_prev, &cte_sum](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+    h.onMessage([
+        &pidTests, 
+        &pidTest, 
+        &throttle, 
+        &cte_prev, 
+        &cte_sum,
+        &generator,
+        &dist_tau_p,
+        &dist_tau_d,
+        &dist_tau_i,
+        &step
+    ](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+
         // "42" at the start of the message means there's a websocket message event.
         // The 4 signifies a websocket message
         // The 2 signifies a websocket event
@@ -272,20 +243,18 @@ int main()
                     double angle = std::stod(j[1]["steering_angle"].get<std::string>());
                     double steer_value;
                     
-                    if (fabs(cte) > 4.0) { //} 2.0) {
-                        cte_sum = 0;
+                    if (fabs(cte) > pidTest.cte_tolerance) { 
+                        pidTest.result = 0;
+                        pidTest.num_steps = step;
+                        pidTest.mean_speed = pidTest.mean_speed / step;
+                        saveAndReset(pidTests, pidTest, ws);
                         step = 0;
-                        std::string msg("42[\"reset\", {}]");
-                        ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+                        cte_prev = 0;
+                        cte_sum = 0;
+                        pidTest = PIDTest(generator, dist_tau_p, dist_tau_d, dist_tau_i, throttle, CTE_TOLERANCE);
                     }
-                    /*
-                     * TODO: Calcuate steering value here, remember the steering value is
-                     * [-1, 1].
-                     * NOTE: Feel free to play around with the throttle and speed. Maybe use
-                     * another PID controller to control the speed!
-                     */
-                    
-                    steer_value = -tau_p * cte - tau_d * (cte - cte_prev) - tau_i * cte_sum;
+
+                    steer_value = -pidTest.tau_p * cte - pidTest.tau_d * (cte - cte_prev) - pidTest.tau_i * cte_sum;
                     
                     
                     // DEBUG
@@ -293,21 +262,28 @@ int main()
                     
                     json msgJson;
                     msgJson["steering_angle"] = steer_value;
-                    msgJson["throttle"] = throttle; // 0.45; //0.3;
+                    msgJson["throttle"] = throttle; 
                     auto msg = "42[\"steer\"," + msgJson.dump() + "]";
                     std::cout << msg << std::endl;
                     ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
                     
                     cte_prev = cte;
                     cte_sum += cte;
-                    if (fabs(cte) > max_abs_cte) max_abs_cte = fabs(cte);
-                    std::cout << "max_abx_cte: " << max_abs_cte << " step: " << step << std::endl;  // max_abs_cte shoulb be less than 2.5
+                    if (fabs(cte) > pidTest.max_abs_cte) pidTest.max_abs_cte = fabs(cte);
+                    std::cout << "max_abs_cte: " << pidTest.max_abs_cte << " step: " << step << std::endl;  // max_abs_cte shoulb be less than 2.5
                     step++;
+                    pidTest.mean_speed += speed;
+
                     if (step > MAX_NUM_STEPS) {
-                        cte_sum = 0;
+                        pidTest.result = 1;
+                        pidTest.num_steps = step;
+                        pidTest.mean_speed = pidTest.mean_speed / step;
+                        saveAndReset(pidTests, pidTest, ws);
                         step = 0;
-                        std::string msg("42[\"reset\", {}]");
-                        ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+                        cte_prev = 0;
+                        cte_sum = 0;
+                        saveAndReset(pidTests, pidTest, ws);
+                        pidTest = PIDTest(generator, dist_tau_p, dist_tau_d, dist_tau_i, throttle, CTE_TOLERANCE);
                     }
                 }
             } else {
@@ -354,3 +330,5 @@ int main()
     }
     h.run();
 }
+
+
