@@ -11,16 +11,17 @@
 #include <string>
 
 
-#define MAX_NUM_STEPS 3000
-#define PID_TESTS_CVS_FILE "../result/pidTests.csv"
-#define CTE_TOLERANCE   2.0
-#define CENTER_TAU_P    0.002
-#define DELTA_TAU_P     0.000
-#define CENTER_TAU_D    2.50
-#define DELTA_TAU_D     0.10
-#define CENTER_TAU_I    0.000
-#define DELTA_TAU_I     0.000
-
+#define MAX_NUM_STEPS 6000
+//#define PID_TESTS_CVS_FILE "../result/pidTests.csv"
+#define PID_TESTS_CVS_FILE "/Users/silviohohne/projeto/CarND-PID-Control-Project/result/pidTests.csv"
+#define CTE_TOLERANCE   3.0
+#define CENTER_TAU_P    0.110566
+#define DELTA_TAU_P     0.040
+#define CENTER_TAU_D    1.69017
+#define DELTA_TAU_D     0.40
+#define CENTER_TAU_I    0.0000259
+#define DELTA_TAU_I     0.00001
+#define THROTTLE        0.440
 
 // for convenience
 using json = nlohmann::json;
@@ -87,7 +88,7 @@ PIDTest::PIDTest() {
     throttle = 0;
     num_steps = 0;
     mean_speed = 0;
-    cte_tolerance = cte_tolerance;
+    cte_tolerance = CTE_TOLERANCE;
     max_abs_cte = 0;
     result = 0;
 }
@@ -186,7 +187,7 @@ void PIDTest::save(std::string filename, std::vector<PIDTest>& pidTests) {
 void saveAndReset(std::vector<PIDTest>& pidTests, PIDTest& pidTest, uWS::WebSocket<uWS::SERVER> ws) {
    // std::cout << "saveAndReset" << std::endl;
     pidTests.push_back(pidTest);
-    if (pidTests.size() % 30 == 29) {
+    if (pidTests.size() % 15 == 14) {
         PIDTest::save(PID_TESTS_CVS_FILE, pidTests);
     }
     std::string msg("42[\"reset\", {}]");
@@ -209,7 +210,7 @@ int main()
     std::uniform_real_distribution<double> dist_tau_d(CENTER_TAU_D - DELTA_TAU_D, CENTER_TAU_D + DELTA_TAU_D);
     std::uniform_real_distribution<double> dist_tau_i(CENTER_TAU_I - DELTA_TAU_I, CENTER_TAU_I + DELTA_TAU_I);
 
-    double throttle = 0.25; 
+    double throttle = THROTTLE;
     int step = 0;
     double cte_prev = 0.0;
     double cte_sum = 0.0;
