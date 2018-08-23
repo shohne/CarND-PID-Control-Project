@@ -11,17 +11,40 @@
 #include <string>
 
 
-#define MAX_NUM_STEPS 6000
+#define MAX_NUM_STEPS 9000
 //#define PID_TESTS_CVS_FILE "../result/pidTests.csv"
 #define PID_TESTS_CVS_FILE "/Users/silviohohne/projeto/CarND-PID-Control-Project/result/pidTests.csv"
 #define CTE_TOLERANCE   3.0
-#define CENTER_TAU_P    0.110566
-#define DELTA_TAU_P     0.040
-#define CENTER_TAU_D    1.69017
-#define DELTA_TAU_D     0.40
-#define CENTER_TAU_I    0.0000259
-#define DELTA_TAU_I     0.00001
-#define THROTTLE        0.440
+#define CENTER_TAU_P    0.137615
+#define DELTA_TAU_P     0
+//0.0025
+#define CENTER_TAU_D    2.20015
+#define DELTA_TAU_D     0
+//0.024
+#define CENTER_TAU_I    0.0000325
+#define DELTA_TAU_I     0
+//0.0000005
+#define THROTTLE        0.570
+
+/*
+ CTE_TOLERANCE   3.0
+ CENTER_TAU_P    0.137615
+ CENTER_TAU_D    2.20015
+ CENTER_TAU_I    0.0000325
+ THROTTLE        0.570
+ T = 41.5
+ */
+
+/*
+CTE_TOLERANCE   3.0
+CENTER_TAU_P    0.137615
+CENTER_TAU_D    2.20015
+CENTER_TAU_I    0.0000325
+
+if (speed < 69 - 6*fabs(cte)) throttle = 1.00;
+else throttle = 0.25;
+T =  38.5
+*/
 
 // for convenience
 using json = nlohmann::json;
@@ -246,7 +269,7 @@ int main()
                     double angle = std::stod(j[1]["steering_angle"].get<std::string>());
                     double steer_value;
                     
-                    if (fabs(cte) > pidTest.cte_tolerance) { 
+                    if (fabs(cte+cte_prev) > 2*pidTest.cte_tolerance) {
                         pidTest.result = 0;
                         pidTest.num_steps = step;
                         pidTest.mean_speed = pidTest.mean_speed / step;
@@ -261,20 +284,26 @@ int main()
                     
                     
                     // DEBUG
-                    std::cout << "CTE: " << cte << 
+             /*       std::cout << "CTE: " << cte <<
                     " Steering Value: " << steer_value << 
                     " Tolerance: " << pidTest.cte_tolerance << 
-                    " pidTest.tau_p: " << pidTest.tau_p <<  
+                    " pidTest.tau_p: " << pidTest.tau_p <<
                     " pidTest.tau_d: " << pidTest.tau_d <<  
                     " pidTest.tau_i: " << pidTest.tau_i <<  
                     " step: " << step <<  
                      std::endl;
+              */
+                    
+                    if (speed < 71 - 6*fabs(cte)) throttle = 1.00;
+                    else throttle = 0.25;
+                    
+              //      throttle = 0.25;
                     
                     json msgJson;
                     msgJson["steering_angle"] = steer_value;
                     msgJson["throttle"] = throttle; 
                     auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-                    std::cout << msg << std::endl;
+                 //   std::cout << msg << std::endl;
                     ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
                     
                     cte_prev = cte;
@@ -292,7 +321,6 @@ int main()
                         step = 0;
                         cte_prev = 0;
                         cte_sum = 0;
-                        saveAndReset(pidTests, pidTest, ws);
                         pidTest = PIDTest(generator, dist_tau_p, dist_tau_d, dist_tau_i, throttle, CTE_TOLERANCE);
                     }
                 }
