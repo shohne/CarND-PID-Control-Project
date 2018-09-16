@@ -26,6 +26,8 @@
 //0.0000005
 #define THROTTLE        0.570
 
+#define SAVE            false
+
 /*
  CTE_TOLERANCE   3.0
  CENTER_TAU_P    0.137615
@@ -210,7 +212,9 @@ void PIDTest::save(std::string filename, std::vector<PIDTest>& pidTests) {
 void saveAndReset(std::vector<PIDTest>& pidTests, PIDTest& pidTest, uWS::WebSocket<uWS::SERVER> ws) {
    // std::cout << "saveAndReset" << std::endl;
     pidTests.push_back(pidTest);
-    if (pidTests.size() % 15 == 14) {
+
+    
+    if (pidTests.size() % 15 == 14 && SAVE) {
         PIDTest::save(PID_TESTS_CVS_FILE, pidTests);
     }
     std::string msg("42[\"reset\", {}]");
@@ -281,18 +285,6 @@ int main()
                     }
 
                     steer_value = -pidTest.tau_p * cte - (step > 0 ? pidTest.tau_d : 0) * (cte - cte_prev) - pidTest.tau_i * cte_sum;
-                    
-                    
-                    // DEBUG
-             /*       std::cout << "CTE: " << cte <<
-                    " Steering Value: " << steer_value << 
-                    " Tolerance: " << pidTest.cte_tolerance << 
-                    " pidTest.tau_p: " << pidTest.tau_p <<
-                    " pidTest.tau_d: " << pidTest.tau_d <<  
-                    " pidTest.tau_i: " << pidTest.tau_i <<  
-                    " step: " << step <<  
-                     std::endl;
-              */
                     
                     if (speed < 71 - 6*fabs(cte)) throttle = 1.00;
                     else throttle = 0.25;
