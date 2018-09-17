@@ -12,8 +12,7 @@
 
 
 #define MAX_NUM_STEPS 9000
-//#define PID_TESTS_CVS_FILE "../result/pidTests.csv"
-#define PID_TESTS_CVS_FILE "/Users/silviohohne/projeto/CarND-PID-Control-Project/result/pidTests.csv"
+#define PID_TESTS_CVS_FILE "./result/pidTests.csv"
 #define CTE_TOLERANCE   3.0
 #define CENTER_TAU_P    0.137615
 #define DELTA_TAU_P     0
@@ -27,26 +26,6 @@
 #define THROTTLE        0.570
 
 #define SAVE            false
-
-/*
- CTE_TOLERANCE   3.0
- CENTER_TAU_P    0.137615
- CENTER_TAU_D    2.20015
- CENTER_TAU_I    0.0000325
- THROTTLE        0.570
- T = 41.5
- */
-
-/*
-CTE_TOLERANCE   3.0
-CENTER_TAU_P    0.137615
-CENTER_TAU_D    2.20015
-CENTER_TAU_I    0.0000325
-
-if (speed < 69 - 6*fabs(cte)) throttle = 1.00;
-else throttle = 0.25;
-T =  38.5
-*/
 
 // for convenience
 using json = nlohmann::json;
@@ -221,7 +200,7 @@ void saveAndReset(std::vector<PIDTest>& pidTests, PIDTest& pidTest, uWS::WebSock
     ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 }
 
-int main()
+int main(int argc, char **argv)
 {
     uWS::Hub h;
 
@@ -229,7 +208,13 @@ int main()
 
     std::ifstream ifs(PID_TESTS_CVS_FILE);
     if(ifs) {
+        std::cout << std::endl << "loading file: " << PID_TESTS_CVS_FILE << std::endl;
         pidTests = PIDTest::load(ifs);
+    }
+    
+    bool fast_mode = false;
+    if (argc >= 2) {
+        if (std::strcmp(argv[1], "fast") == 0) fast_mode = true;
     }
 
     std::default_random_engine generator;
@@ -254,7 +239,8 @@ int main()
         &dist_tau_p,
         &dist_tau_d,
         &dist_tau_i,
-        &step
+        &step,
+        &fast_mode
     ](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
 
         // "42" at the start of the message means there's a websocket message event.
@@ -284,24 +270,26 @@ int main()
                         pidTest = PIDTest(generator, dist_tau_p, dist_tau_d, dist_tau_i, throttle, CTE_TOLERANCE);
                     }
 
+                    // implement PID
                     steer_value = -pidTest.tau_p * cte - (step > 0 ? pidTest.tau_d : 0) * (cte - cte_prev) - pidTest.tau_i * cte_sum;
                     
-                    if (speed < 71 - 6*fabs(cte)) throttle = 1.00;
-                    else throttle = 0.25;
-                    
-              //      throttle = 0.25;
+                    if (fast_mode) {
+                        if (speed < 70 - 6*fabs(cte)) throttle = 1.00;
+                        else throttle = 0.25;
+                    }
+                    else {
+                        throttle = 0.25;
+                    }
                     
                     json msgJson;
                     msgJson["steering_angle"] = steer_value;
                     msgJson["throttle"] = throttle; 
                     auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-                 //   std::cout << msg << std::endl;
                     ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
                     
                     cte_prev = cte;
                     cte_sum += cte;
                     if (fabs(cte) > pidTest.max_abs_cte) pidTest.max_abs_cte = fabs(cte);
-               //     std::cout << "max_abs_cte: " << pidTest.max_abs_cte << " step: " << step << std::endl;  // max_abs_cte shoulb be less than 2.5
                     step++;
                     pidTest.mean_speed += speed;
 
